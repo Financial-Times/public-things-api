@@ -239,7 +239,7 @@ func TestInvalidConceptsAPIURL(t *testing.T) {
 
 	router.ServeHTTP(rr, req)
 	assert.Equal(t, 503, rr.Code, "TestInvalidConceptsAPIURL failed: status codes do not match!")
-	assert.Equal(t, `{"message":"Error getting thing with uuid 6773e864-78ab-4051-abc2-f4e9ab423ebb, err=parse ://foo.com: missing protocol scheme"}`, rr.Body.String(), "TestInvalidConceptsAPIURL failed: status body does not match!")
+	assert.Contains(t, rr.Body.String(), "Error getting thing with uuid 6773e864-78ab-4051-abc2-f4e9ab423ebb, err=parse", "TestInvalidConceptsAPIURL failed: status body does not match!")
 }
 
 func TestMethodNotAllowed(t *testing.T) {
