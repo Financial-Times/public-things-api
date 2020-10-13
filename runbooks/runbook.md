@@ -1,6 +1,6 @@
 # UPP - Public Things API
 
-The service calls Public Concepts API to retrieve the information from the Neo4j data store
+A public API that gives basic information about Things in the knowledge graph database.
 
 ## Code
 
