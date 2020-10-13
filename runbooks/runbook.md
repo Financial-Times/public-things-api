@@ -1,6 +1,6 @@
 # UPP - Public Things API
 
-Provides a publicly available API that gives basic information about things in the graph store. It is written in Go, uses Neo4j as a data store, and is deployed in the UPP Kubernetes stack
+The service calls Public Concepts API to retrieve the information from the Neo4j data store
 
 ## Code
 
