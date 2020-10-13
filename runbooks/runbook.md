@@ -51,6 +51,10 @@ No
 
 No
 
+## Dependencies
+
+- public-concepts-api
+
 ## Failover Architecture Type
 
 ActiveActive
