@@ -8,7 +8,7 @@ public-things-api
 
 ## Primary URL
 
-<https://github.com/Financial-Times/public-things-api>
+<http://api.ft.com/things>
 
 ## Service Tier
 
