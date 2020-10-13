@@ -96,10 +96,10 @@ There is no key rotation procedure for this system.
 
 ## Monitoring
 
-Look for the pods in the cluster health endpoint and click to see pod health and checks:
+Service in UPP K8S delivery clusters:
 
-- <https://upp-prod-delivery-eu.upp.ft.com/__health>
-- <https://upp-prod-delivery-us.upp.ft.com/__health>
+- Delivery-Prod-EU health: <https://upp-prod-delivery-eu.upp.ft.com/__health/__pods-health?service-name=public-things-api>
+- Delivery-Prod-US health: <https://upp-prod-delivery-us.upp.ft.com/__health/__pods-health?service-name=public-things-api>
 
 ## First Line Troubleshooting
 
