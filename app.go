@@ -2,19 +2,20 @@ package main
 
 import (
 	"fmt"
-	"github.com/Financial-Times/go-ft-http/fthttp"
 	"net/http"
 	"os"
 	"strconv"
 	"time"
 
+	"github.com/Financial-Times/go-ft-http/fthttp"
+
 	fthealth "github.com/Financial-Times/go-fthealth/v1_1"
 	log "github.com/Financial-Times/go-logger"
 	"github.com/Financial-Times/http-handlers-go/httphandlers"
-	"github.com/Financial-Times/public-things-api/things"
+	"github.com/Financial-Times/public-things-api/v2/things"
 	status "github.com/Financial-Times/service-status-go/httphandlers"
 	"github.com/gorilla/mux"
-	"github.com/jawher/mow.cli"
+	cli "github.com/jawher/mow.cli"
 	_ "github.com/joho/godotenv/autoload"
 	"github.com/rcrowley/go-metrics"
 )
