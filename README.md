@@ -10,12 +10,9 @@ Things are being migrated to be served from the new [Public Concepts API](https:
 Download the source code, dependencies and test dependencies:
 
 ```
-curl https://raw.githubusercontent.com/golang/dep/master/install.sh | sh
-mkdir $GOPATH/src/github.com/Financial-Times/public-things-api
-cd $GOPATH/src/github.com/Financial-Times
-git clone https://github.com/Financial-Times/public-things-api.git
-cd public-things-api && dep ensure -vendor-only
-go build .
+go get github.com/Financial-Times/public-things-api
+cd $GOPATH/src/github.com/Financial-Times/public-things-api
+go build -mod=readonly .
 ```
 
 ## Running locally
@@ -23,7 +20,7 @@ go build .
 1. Run the tests and install the binary:
 
     ```
-    go test ./...
+    go test -mod=readonly ./...
     go install
     ```
 

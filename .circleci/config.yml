@@ -1,184 +1,21 @@
-version: 2
+version: 2.1
+
+orbs:
+  ft-golang-ci: financial-times/golang-ci@1
+
 workflows:
-  version: 2
   tests_and_docker:
     jobs:
-      - build
-      - dredd
-      - docker_build:
+      - ft-golang-ci/build-and-test:
+          name: build-and-test-project
+          context: dockerhub-shared
+      - ft-golang-ci/docker-build:
+          name: build-docker-image
           requires:
-            - build
-#  nightly:
-#    triggers:
-#      - schedule:
-#          cron: "45 0 * * 1-5"
-#          filters:
-#            branches:
-#              only:
-#                - master
-#    jobs:
-#      - loadtest
-jobs:
-  build:
-    working_directory: /go/src/github.com/Financial-Times/public-things-api
-    docker:
-      - image: golang:1
-        environment:
-          GOPATH: /go
-          CIRCLE_TEST_REPORTS: /tmp/test-results
-          CIRCLE_COVERAGE_REPORT: /tmp/coverage-results
-          NEO4J_TEST_URL: "http://localhost:7474/db/data/"
-      - image: neo4j:3.2.7-enterprise
-        environment:
-          NEO4J_AUTH: none
-          NEO4J_HEAP_MEMORY: 256
-          NEO4J_CACHE_MEMORY: 256M
-    steps:
-      - checkout
-      - run:
-          name: External Dependencies
-          command: |
-            curl https://raw.githubusercontent.com/golang/dep/master/install.sh | sh
-            go get -u github.com/mattn/goveralls
-            go get -u github.com/jstemmer/go-junit-report
-      - run:
-          name: Test Results
-          command: |
-            mkdir -p ${CIRCLE_TEST_REPORTS}
-            mkdir -p ${CIRCLE_COVERAGE_REPORT}
-      - run:
-          name: Importing libraries
-          command: dep ensure -v -vendor-only
-      - run: |
-            wget --retry-connrefused --no-check-certificate -T 60 $NEO4J_TEST_URL; curl $NEO4J_TEST_URL
-      - run:
-          name: Go Build
-          command: go build -v
-      - run:
-          name: Run Tests
-          command: |
-            go test -race -v ./... | /go/bin/go-junit-report > ${CIRCLE_TEST_REPORTS}/main.xml
-            go test -race -cover -coverprofile=$CIRCLE_COVERAGE_REPORT/coverage.out ./...
-      - run:
-          name: Upload Coverage
-          command: /go/bin/goveralls -coverprofile=${CIRCLE_COVERAGE_REPORT}/coverage.out -service=circle-ci -repotoken=$COVERALLS_TOKEN
-      - store_test_results:
-          path: /tmp/test-results
-  dredd:
-    working_directory: /go/src/github.com/Financial-Times/public-things-api
-    docker:
-      - image: bankrs/golang-dredd:go1.10.0-dredd5.0.0
-        environment:
-          GOPATH: /go
-          CONCEPTS_API: http://localhost:9000
-      - image: peteclarkft/ersatz:stable
-    steps:
-      - checkout
-      - run:
-          name: External Dependencies
-          command: |
-            curl https://raw.githubusercontent.com/golang/dep/master/install.sh | sh
-            go get -u github.com/mattn/goveralls
-            go get -u github.com/jstemmer/go-junit-report
-      - run:
-          name: Load ersatz-fixtures.yml to ersatz image
-          command: "curl -X POST --data-binary @_ft/ersatz-fixtures.yml -H \"Content-type: text/x-yaml\" http://localhost:9000/__configure"
-      - run:
-          name: Import libraries
-          command: dep ensure -v -vendor-only
-      - run:
-          name: Go Build
-          command: go build -v
-      - run:
-          name: Dredd API Testing
-          command: dredd
-  docker_build:
-    working_directory: /public-things-api
-    docker:
-      - image: docker:stable-git
-    steps:
-      - checkout
-      - setup_remote_docker
-      - run:
-          name: Build Dockerfile
-          command: docker build .
-#  loadtest:
-#    working_directory: /go/src/github.com/Financial-Times/public-things-api
-#    docker:
-#      - image: golang:1.10
-#        environment:
-#          GOPATH: /go
-#    steps:
-#      - checkout
-#      - run:
-#          name: External Dependencies
-#          command: go get -u github.com/tsenart/vegeta
-#      - run:
-#          name: Install jq
-#          command: |
-#            wget https://github.com/stedolan/jq/releases/download/jq-1.5/jq-1.5.tar.gz
-#            tar -xzf jq-1.5.tar.gz
-#            cd jq-1.5
-#            ./configure
-#            make
-#            make install
-#      - run:
-#          name: Install vegeta
-#          command: |
-#            cd /go/src/github.com/tsenart/vegeta
-#            go install
-#            cd /go/bin
-#      - run:
-#          name: Run load test
-#          command: vegeta attack -workers=2 -duration=300s -targets=./things.req > results.bin
-#      - run:
-#          name: Get hist and result
-#          command: |
-#            vegeta report -inputs=results.bin -reporter='hist[0,50ms,100ms,250ms,500ms,1s,2s,5s]'
-#            echo "------------------------------------------------------"
-#            vegeta report -inputs=results.bin -reporter=text
-#      - run:
-#          name: Store load test result
-#          command: echo "nothing for now"
-#      - run:
-#          name: Send result to Slack when test fails
-#          command: |
-#            TEST_RESULT=`vegeta report -inputs=results.bin -reporter=text`
-#            TIMESTAMP=$(date "+%s")
-#            SUCCEEDED_MESSAGE=$(cat <<EOF
-#              {
-#                "attachments": [
-#                  {
-#                    "text": "Load testing succeeded - $CIRCLE_PROJECT_REPONAME/$CIRCLE_BRANCH",
-#                    "color": "good",
-#                  }
-#                ]
-#              }
-#            EOF
-#            )
-#            FAILED_MESSAGE=$(cat <<EOF
-#              {
-#                "attachments": [
-#                  {
-#                    "author_name": "$CIRCLE_PR_USERNAME",
-#                    "title": "Load testing failed - $CIRCLE_PROJECT_REPONAME/$CIRCLE_BRANCH <$CIRCLE_BUILD_URL|#$CIRCLE_BUILD_NUM>",
-#                    "color": "danger",
-#                    "text": "95th latency is over 500ms. \n \`\`\`$TEST_RESULT\`\`\`",
-#                    "footer": "$CIRCLE_PROJECT_REPONAME/$CIRCLE_BRANCH",
-#                    "ts": $TIMESTAMP,
-#                    "mrkdwn_in": ["text"]
-#                  }
-#                ]
-#              }
-#            EOF
-#            )
-#            # Latency values from report are nano second.
-#            # The threshold is over 500ms (95 percentile latency)
-#            LATENCY_MS=`vegeta report -inputs=results.bin -reporter=json | jq -e '.latencies."95th" / (1000 * 1000) | floor'`
-#            if [ $LATENCY_MS -lt 500 ] ; then
-#              curl "${SLACK_WEBHOOK_URL}" -X "POST" -H "content-type: application/json" -d "${SUCCEEDED_MESSAGE}"
-#              exit 0
-#            else
-#              curl "${SLACK_WEBHOOK_URL}" -X "POST" -H "content-type: application/json" -d "${FAILED_MESSAGE}"
-#              exit 1
-#            fi
+            - build-and-test-project
+          context: dockerhub-shared
+  snyk-scanning:
+    jobs:
+      - ft-golang-ci/scan:
+          name: scan-dependencies
+          context: cm-team-snyk
