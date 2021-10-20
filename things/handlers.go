@@ -19,7 +19,7 @@ import (
 	"github.com/Financial-Times/transactionid-utils-go"
 	"github.com/gorilla/mux"
 
-	gouuid "github.com/satori/go.uuid"
+	gouuid "github.com/google/uuid"
 )
 
 var CacheControlHeader string
@@ -283,7 +283,7 @@ type uuidErrorTuple struct {
 
 func validateUUID(uuids ...string) error {
 	for _, uuid := range uuids {
-		_, err := gouuid.FromString(uuid)
+		_, err := gouuid.Parse(uuid)
 		if err != nil {
 			return errors.New(fmt.Sprintf("Invalid uuid: %s, err: %v", uuid, err))
 		}
