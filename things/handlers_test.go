@@ -165,7 +165,7 @@ func TestHandlers(t *testing.T) {
 		"",
 		nil,
 		400,
-		`{"message":"Invalid uuid: 6773e864-111178ab-4051-abc2-f4e9ab423ebc, err: uuid: incorrect UUID length: 6773e864-111178ab-4051-abc2-f4e9ab423ebc"}`,
+		`{"message":"Invalid uuid: 6773e864-111178ab-4051-abc2-f4e9ab423ebc, err: invalid UUID length: 40"}`,
 	}
 
 	getThingsWithAlternativeUUID := testCase{
