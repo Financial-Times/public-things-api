@@ -2,6 +2,11 @@ FROM golang:1
 
 ENV PROJECT=public-things-api
 
+ARG GITHUB_USERNAME
+ARG GITHUB_TOKEN
+
+RUN git config --global url."https://${GITHUB_USERNAME}:${GITHUB_TOKEN}@github.com/".insteadOf "https://github.com/"
+
 COPY . /${PROJECT}/
 WORKDIR /${PROJECT}
 
