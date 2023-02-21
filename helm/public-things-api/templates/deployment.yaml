@@ -44,6 +44,8 @@ spec:
             value: 5m
           - name: CONCEPTS_API
             value: "http://public-concepts-api:8080"
+          - name: PUBLIC_API_URL
+            value: "http://api.ft.com"
         ports:
         - containerPort: 8080
         livenessProbe:

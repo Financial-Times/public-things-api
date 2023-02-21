@@ -34,11 +34,6 @@ func main() {
 		Desc:   "Port to listen on",
 		EnvVar: "APP_PORT",
 	})
-	env := app.String(cli.StringOpt{
-		Name:  "env",
-		Value: "local",
-		Desc:  "environment this app is running in",
-	})
 	cacheDuration := app.String(cli.StringOpt{
 		Name:   "cache-duration",
 		Value:  "30s",
@@ -51,11 +46,17 @@ func main() {
 		Desc:   "Log level of the app",
 		EnvVar: "LOG_LEVEL",
 	})
-	publicConceptsApiURL := app.String(cli.StringOpt{
+	publicConceptsAPIURL := app.String(cli.StringOpt{
 		Name:   "publicConceptsApiURL",
 		Value:  "http://localhost:8080",
 		Desc:   "Public concepts API endpoint URL.",
 		EnvVar: "CONCEPTS_API",
+	})
+	apiURL := app.String(cli.StringOpt{
+		Name:   "publicAPIURL",
+		Value:  "http://api.ft.com",
+		Desc:   "API Gateway URL used when building the thing ID url in the response, in the format scheme://host",
+		EnvVar: "PUBLIC_API_URL",
 	})
 
 	log.InitLogger(*appSystemCode, *logLevel)
@@ -64,7 +65,7 @@ func main() {
 	httpClient := fthttp.NewClient(30*time.Second, "PAC", *appSystemCode)
 	app.Action = func() {
 		log.Infof("public-things-api will listen on port: %s", *port)
-		runServer(*port, *cacheDuration, *env, *publicConceptsApiURL, httpClient)
+		runServer(*port, *cacheDuration, *publicConceptsAPIURL, *apiURL, httpClient)
 
 	}
 	log.InitLogger(*appSystemCode, *logLevel)
@@ -75,9 +76,7 @@ func main() {
 	app.Run(os.Args)
 }
 
-func runServer(port string, cacheDuration string, env string, publicConceptsApiURL string,
-	httpClient *http.Client) {
-
+func runServer(port, cacheDuration, publicConceptsAPIURL, apiURL string, httpClient *http.Client) {
 	if duration, durationErr := time.ParseDuration(cacheDuration); durationErr != nil {
 		log.Fatalf("Failed to parse cache duration string, %v", durationErr)
 	} else {
@@ -86,7 +85,10 @@ func runServer(port string, cacheDuration string, env string, publicConceptsApiU
 
 	servicesRouter := mux.NewRouter()
 
-	handler := things.NewHandler(httpClient, publicConceptsApiURL)
+	handler, err := things.NewHandler(httpClient, publicConceptsAPIURL, apiURL)
+	if err != nil {
+		log.WithError(err).Fatalf("creating things handler")
+	}
 
 	// Healthchecks and standards first
 	healthCheck := fthealth.TimedHealthCheck{

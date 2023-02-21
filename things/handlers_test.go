@@ -31,6 +31,7 @@ var testConcept = Thing{ID: canonicalUUID, APIURL: canonicalUUID, Types: []strin
 var testSecondConcept = Thing{ID: secondCanonicalUUID, APIURL: secondCanonicalUUID, Types: []string{}}
 var testThirdConcept = Thing{ID: thirdCanonicalUUID, APIURL: thirdCanonicalUUID, Types: []string{}}
 var testRelationships = []string{"testBroader", "testNarrower"}
+var logLevel = "panic"
 
 type mockHTTPClient struct {
 	resp       string
@@ -54,7 +55,7 @@ func (mhc *mockHTTPClient) Do(req *http.Request) (resp *http.Response, err error
 }
 
 func TestHandlers(t *testing.T) {
-	logger.InitLogger("test service", "debug")
+	logger.InitLogger("test service", logLevel)
 	var mockClient mockHTTPClient
 	router := mux.NewRouter()
 
@@ -208,7 +209,8 @@ func TestHandlers(t *testing.T) {
 		mockClient.statusCode = test.clientCode
 		mockClient.err = test.clientError
 
-		handler := NewHandler(&mockClient, "localhost:8080/concepts")
+		handler, err := NewHandler(&mockClient, "localhost:8080/concepts", "http://api.ft.com")
+		assert.NoError(t, err)
 		handler.RegisterHandlers(router)
 
 		rr := httptest.NewRecorder()
@@ -225,14 +227,15 @@ func TestHandlers(t *testing.T) {
 }
 
 func TestInvalidConceptsAPIURL(t *testing.T) {
-	logger.InitLogger("test service", "debug")
+	logger.InitLogger("test service", logLevel)
 	mockClient := mockHTTPClient{
 		resp:       "",
 		statusCode: 200,
 		err:        nil,
 	}
 	router := mux.NewRouter()
-	handler := NewHandler(&mockClient, "://foo.com")
+	handler, err := NewHandler(&mockClient, "://foo.com", "http://api.ft.com")
+	assert.NoError(t, err)
 	handler.RegisterHandlers(router)
 	rr := httptest.NewRecorder()
 	req, _ := http.NewRequest("GET", "/things/6773e864-78ab-4051-abc2-f4e9ab423ebb", nil)
@@ -243,14 +246,15 @@ func TestInvalidConceptsAPIURL(t *testing.T) {
 }
 
 func TestMethodNotAllowed(t *testing.T) {
-	logger.InitLogger("test service", "debug")
+	logger.InitLogger("test service", logLevel)
 	mockClient := mockHTTPClient{
 		resp:       "",
 		statusCode: 200,
 		err:        nil,
 	}
 	router := mux.NewRouter()
-	handler := NewHandler(&mockClient, "localhost:8080")
+	handler, err := NewHandler(&mockClient, "localhost:8080", "http://api.ft.com")
+	assert.NoError(t, err)
 	handler.RegisterHandlers(router)
 	rr := httptest.NewRecorder()
 	req, _ := http.NewRequest("POST", "/things/6773e864-78ab-4051-abc2-f4e9ab423ebb", nil)
@@ -260,13 +264,14 @@ func TestMethodNotAllowed(t *testing.T) {
 }
 
 func TestHealthCheck(t *testing.T) {
-	logger.InitLogger("test service", "debug")
+	logger.InitLogger("test service", logLevel)
 
 	mockClient := mockHTTPClient{
 		statusCode: 200,
 		err:        nil,
 	}
-	handler := NewHandler(&mockClient, "localhost:8080")
+	handler, err := NewHandler(&mockClient, "localhost:8080", "http://api.ft.com")
+	assert.NoError(t, err)
 
 	healthCheck := fthealth.TimedHealthCheck{
 		HealthCheck: fthealth.HealthCheck{
@@ -285,20 +290,21 @@ func TestHealthCheck(t *testing.T) {
 	rr := httptest.NewRecorder()
 	req, _ := http.NewRequest("GET", "/__health", nil)
 
-	logger.InitLogger("test service", "debug")
+	logger.InitLogger("test service", logLevel)
 
 	router.ServeHTTP(rr, req)
 	assert.Equal(t, http.StatusOK, rr.Code)
 }
 
 func TestGtgCheck(t *testing.T) {
-	logger.InitLogger("test service", "debug")
+	logger.InitLogger("test service", logLevel)
 
 	mockClient := mockHTTPClient{
 		statusCode: 200,
 		err:        nil,
 	}
-	handler := NewHandler(&mockClient, "localhost:8080")
+	handler, err := NewHandler(&mockClient, "localhost:8080", "http://api.ft.com")
+	assert.NoError(t, err)
 
 	healthCheck := fthealth.TimedHealthCheck{
 		HealthCheck: fthealth.HealthCheck{
@@ -317,14 +323,14 @@ func TestGtgCheck(t *testing.T) {
 	rr := httptest.NewRecorder()
 	req, _ := http.NewRequest("GET", "/__GTG", nil)
 
-	logger.InitLogger("test service", "debug")
+	logger.InitLogger("test service", logLevel)
 
 	router.ServeHTTP(rr, req)
 	assert.Equal(t, http.StatusOK, rr.Code)
 }
 
 func TestDeprecatedConcept(t *testing.T) {
-	logger.InitLogger("test service", "debug")
+	logger.InitLogger("test service", logLevel)
 	var js BasicConcept
 
 	mockClient := mockHTTPClient{
@@ -333,7 +339,8 @@ func TestDeprecatedConcept(t *testing.T) {
 		err:        nil,
 	}
 	router := mux.NewRouter()
-	handler := NewHandler(&mockClient, "localhost:8080/concepts")
+	handler, err := NewHandler(&mockClient, "localhost:8080/concepts", "http://api.ft.com")
+	assert.NoError(t, err)
 
 	handler.RegisterHandlers(router)
 
@@ -341,13 +348,14 @@ func TestDeprecatedConcept(t *testing.T) {
 	req, _ := http.NewRequest("GET", "/things/de5fe64c-eaf8-3232-8a0b-19f9ccdd5bf0", nil)
 
 	router.ServeHTTP(rr, req)
-	_ = json.Unmarshal([]byte(rr.Body.String()), &js)
+	err = json.Unmarshal(rr.Body.Bytes(), &js)
+	assert.NoError(t, err, "unmarshaling response", rr.Body.String())
 
 	assert.Equal(t, true, js.IsDeprecated, "TestDeprecatedConcept failed: status body does not match!")
 }
 
 func TestSupersedesConcept(t *testing.T) {
-	logger.InitLogger("test service", "debug")
+	logger.InitLogger("test service", logLevel)
 
 	mockClient := mockHTTPClient{
 		resp:       supersedesConcept,
@@ -355,12 +363,14 @@ func TestSupersedesConcept(t *testing.T) {
 		err:        nil,
 	}
 	router := mux.NewRouter()
-	handler := NewHandler(&mockClient, "localhost:8080/concepts")
+	handler, err := NewHandler(&mockClient, "localhost:8080/concepts", "http://api.ft.com")
+	assert.NoError(t, err)
 
 	handler.RegisterHandlers(router)
 
 	rr := httptest.NewRecorder()
-	req, _ := http.NewRequest("GET", "/things/af42a8b7-a1f6-4c86-9df6-41e74266f541?showRelationship=related&showRelationship=broader", nil)
+	req, err := http.NewRequest("GET", "/things/af42a8b7-a1f6-4c86-9df6-41e74266f541?showRelationship=related&showRelationship=broader", nil)
+	assert.NoError(t, err, "sending request")
 
 	router.ServeHTTP(rr, req)
 
@@ -620,7 +630,7 @@ var deprecatedBrand = `{
         "http://www.ft.com/ontology/classification/Classification",
         "http://www.ft.com/ontology/product/Brand"
     ],
-    "directType": "http://www.ft.com/ontology/product/Brand",
+    "type": "http://www.ft.com/ontology/product/Brand",
     "aliases": [
         "Professor of the Month"
     ]
@@ -635,35 +645,39 @@ var supersedesConcept = `{
         "http://www.ft.com/ontology/concept/Concept",
         "http://www.ft.com/ontology/Topic"
     ],
-    "directType": "http://www.ft.com/ontology/Topic",
+    "type": "http://www.ft.com/ontology/Topic",
     "aliases": [
         "Agriculture"
     ],
     "relatedConcepts": [
         {
-            "id": "http://api.ft.com/things/9d4881fa-f11b-4bb8-9746-2a8271b14a4f",
-            "apiUrl": "http://api.ft.com/things/9d4881fa-f11b-4bb8-9746-2a8271b14a4f",
-            "prefLabel": "Agricultural commodities",
-            "types": [
-                "http://www.ft.com/ontology/core/Thing",
-                "http://www.ft.com/ontology/concept/Concept",
-                "http://www.ft.com/ontology/Topic"
-            ],
-            "directType": "http://www.ft.com/ontology/Topic",
+            "concept": {
+                "id": "http://api.ft.com/things/9d4881fa-f11b-4bb8-9746-2a8271b14a4f",
+                "apiUrl": "http://api.ft.com/things/9d4881fa-f11b-4bb8-9746-2a8271b14a4f",
+                "prefLabel": "Agricultural commodities",
+                "types": [
+                    "http://www.ft.com/ontology/core/Thing",
+                    "http://www.ft.com/ontology/concept/Concept",
+                    "http://www.ft.com/ontology/Topic"
+                ],
+                "type": "http://www.ft.com/ontology/Topic"
+            },
             "predicate": "http://www.w3.org/2004/02/skos/core#related"
         },
         {
-            "id": "http://api.ft.com/things/414f547c-9768-4adc-ac6d-d7cf7f62b315",
-            "apiUrl": "http://api.ft.com/things/414f547c-9768-4adc-ac6d-d7cf7f62b315",
-            "prefLabel": "EU agriculture",
-            "types": [
-                "http://www.ft.com/ontology/core/Thing",
-                "http://www.ft.com/ontology/concept/Concept",
-                "http://www.ft.com/ontology/Topic"
-            ],
-            "directType": "http://www.ft.com/ontology/Topic",
-            "predicate": "http://www.ft.com/ontology/supersedes",
-            "isDeprecated": true
+            "concept": {
+                "id": "http://api.ft.com/things/414f547c-9768-4adc-ac6d-d7cf7f62b315",
+                "apiUrl": "http://api.ft.com/things/414f547c-9768-4adc-ac6d-d7cf7f62b315",
+                "prefLabel": "EU agriculture",
+                "types": [
+                    "http://www.ft.com/ontology/core/Thing",
+                    "http://www.ft.com/ontology/concept/Concept",
+                    "http://www.ft.com/ontology/Topic"
+                ],
+                "type": "http://www.ft.com/ontology/Topic",
+                "isDeprecated": true
+            },
+            "predicate": "http://www.ft.com/ontology/supersedes"
         }
     ]
 }`
