@@ -44,6 +44,11 @@ spec:
             value: 5m
           - name: CONCEPTS_API
             value: "http://public-concepts-api:8080"
+          - name: PUBLIC_API_URL
+            valueFrom:
+              configMapKeyRef:
+                name: global-config
+                key: api.host.with.protocol.insecure
         ports:
         - containerPort: 8080
         livenessProbe:

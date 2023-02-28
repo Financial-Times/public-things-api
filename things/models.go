@@ -52,8 +52,8 @@ type TypedValue struct {
 }
 
 type Relationship struct {
-	Concept   BasicConcept `json:concept,omitempty`
-	Predicate string       `json:predicate,omitempty`
+	Concept   BasicConcept `json:"concept,omitempty"`
+	Predicate string       `json:"predicate,omitempty"`
 }
 
 type BasicConcept struct {

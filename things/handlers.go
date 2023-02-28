@@ -12,11 +12,11 @@ import (
 
 	"io/ioutil"
 
+	ontology "github.com/Financial-Times/cm-graph-ontology"
 	fthealth "github.com/Financial-Times/go-fthealth/v1_1"
 	"github.com/Financial-Times/go-logger"
-	"github.com/Financial-Times/neo-model-utils-go/mapper"
 	"github.com/Financial-Times/service-status-go/gtg"
-	"github.com/Financial-Times/transactionid-utils-go"
+	transactionidutils "github.com/Financial-Times/transactionid-utils-go"
 	"github.com/gorilla/mux"
 
 	gouuid "github.com/google/uuid"
@@ -47,13 +47,20 @@ type HttpClient interface {
 type ThingsHandler struct {
 	client      HttpClient
 	conceptsURL string
+	apiURL      string
 }
 
-func NewHandler(client HttpClient, conceptsURL string) ThingsHandler {
-	return ThingsHandler{
-		client,
-		conceptsURL,
+func NewHandler(client HttpClient, conceptsURL, apiURL string) (ThingsHandler, error) {
+	_, err := url.ParseRequestURI(apiURL)
+	if err != nil {
+		return ThingsHandler{}, err
 	}
+
+	return ThingsHandler{
+		client:      client,
+		conceptsURL: conceptsURL,
+		apiURL:      apiURL,
+	}, nil
 }
 
 func (h *ThingsHandler) RegisterHandlers(router *mux.Router) {
@@ -133,21 +140,21 @@ func (rh *ThingsHandler) GetThing(w http.ResponseWriter, r *http.Request) {
 //
 // Non canonical uuid handling:
 //
-// 	Implementation slightly deviates from the single get endpoint for non canonical uuids.
-// 	It tries to resolve the canonical uuid/node itself instead of providing a reference url but strictly stops
-// 	if indirection dept is more than one level.
+//	Implementation slightly deviates from the single get endpoint for non canonical uuids.
+//	It tries to resolve the canonical uuid/node itself instead of providing a reference url but strictly stops
+//	if indirection dept is more than one level.
 //
 // Error handling:
 //
-// 	In case of any error for any given uuid, implementation immediately returns with the error without waiting for the
-// 	in-flight queries to be finished.
+//	In case of any error for any given uuid, implementation immediately returns with the error without waiting for the
+//	in-flight queries to be finished.
 //
 // Response structure:
 //
-// 	Instead of returning an array of things, we are returning/serializing a map of ["things":{[uuid:Thing]}]. Reason behind this
-// 	is simply to provide a convenient way to the caller for making the correlation between requested uuids with respect to
-// 	found things. Since we are handling the resolution of non canonical uuids, returned thing payloads may not have the same
-// 	requested/associated uuid.
+//	Instead of returning an array of things, we are returning/serializing a map of ["things":{[uuid:Thing]}]. Reason behind this
+//	is simply to provide a convenient way to the caller for making the correlation between requested uuids with respect to
+//	found things. Since we are handling the resolution of non canonical uuids, returned thing payloads may not have the same
+//	requested/associated uuid.
 func (rh *ThingsHandler) GetThings(w http.ResponseWriter, r *http.Request) {
 	queryParams := r.URL.Query()
 	transID := transactionidutils.GetTransactionIDFromRequest(r)
@@ -292,12 +299,13 @@ func validateUUID(uuids ...string) error {
 }
 
 func (rh *ThingsHandler) getThingViaConceptsApi(UUID string, relationships []string, transID string) (Concept, bool, error) {
+	log := logger.WithTransactionID(transID).WithUUID(UUID)
 	mappedConcept := Concept{}
 
 	u, err := url.Parse(rh.conceptsURL)
 	if err != nil {
 		msg := fmt.Sprint("URL of Concepts API is invalid")
-		logger.WithError(err).WithUUID(UUID).WithTransactionID(transID).Error(msg)
+		log.WithError(err).Error(msg)
 		return mappedConcept, false, err
 	}
 	u.Path = "/concepts/" + UUID
@@ -310,7 +318,7 @@ func (rh *ThingsHandler) getThingViaConceptsApi(UUID string, relationships []str
 	request, err := http.NewRequest("GET", reqURL, nil)
 	if err != nil {
 		msg := fmt.Sprintf("failed to create request to %s", reqURL)
-		logger.WithError(err).WithUUID(UUID).WithTransactionID(transID).Error(msg)
+		log.WithError(err).Error(msg)
 		return mappedConcept, false, err
 	}
 
@@ -319,7 +327,7 @@ func (rh *ThingsHandler) getThingViaConceptsApi(UUID string, relationships []str
 	resp, err := rh.client.Do(request)
 	if err != nil {
 		msg := fmt.Sprintf("request to %s was unsuccessful", reqURL)
-		logger.WithError(err).WithUUID(UUID).WithTransactionID(transID).Error(msg)
+		log.WithError(err).Error(msg)
 		return mappedConcept, false, err
 	}
 
@@ -333,21 +341,35 @@ func (rh *ThingsHandler) getThingViaConceptsApi(UUID string, relationships []str
 	body, err := ioutil.ReadAll(resp.Body)
 	if err != nil {
 		msg := fmt.Sprintf("failed to read response body: %v", resp.Body)
-		logger.WithError(err).WithUUID(UUID).WithTransactionID(transID).Error(msg)
+		log.WithError(err).Error(msg)
 		return mappedConcept, false, err
 	}
 	if err = json.Unmarshal(body, &conceptsApiResponse); err != nil {
 		msg := fmt.Sprintf("failed to unmarshal response body: %v", body)
-		logger.WithError(err).WithUUID(UUID).WithTransactionID(transID).Error(msg)
+		log.WithError(err).Error(msg)
 		return mappedConcept, false, err
 	}
+
+	typ := extractFinalSectionOfString(conceptsApiResponse.Type)
+	apiURL, err := ontology.APIURL(UUID, []string{typ}, rh.apiURL)
+	if err != nil {
+		log.WithError(err).WithField("type", typ).Error("getting APIURL")
+		return mappedConcept, false, fmt.Errorf("getting APIURL: %w", err)
+	}
+
+	types, err := ontology.FullTypeHierarchy(typ)
+	if err != nil {
+		log.WithError(err).WithField("type", typ).Error("getting type hierarchy")
+		return mappedConcept, false, fmt.Errorf("invalid type hierarchy: %w", err)
+	}
+
 	var altLabels []string
 	mappedConcept.ID = convertID(conceptsApiResponse.ID)
-	mappedConcept.APIURL = mapper.APIURL(UUID, []string{extractFinalSectionOfString(conceptsApiResponse.Type)}, "")
+	mappedConcept.APIURL = apiURL
 	mappedConcept.PrefLabel = conceptsApiResponse.PrefLabel
 	mappedConcept.IsDeprecated = conceptsApiResponse.IsDeprecated
 	mappedConcept.DirectType = conceptsApiResponse.Type
-	mappedConcept.Types = mapper.FullTypeHierarchy(conceptsApiResponse.Type)
+	mappedConcept.Types = types
 
 	for _, keypair := range conceptsApiResponse.AlternativeLabels {
 		switch {
@@ -365,15 +387,27 @@ func (rh *ThingsHandler) getThingViaConceptsApi(UUID string, relationships []str
 	}
 	mappedConcept.ScopeNote = conceptsApiResponse.ScopeNote
 
-	if len(conceptsApiResponse.Broader) > 0 {
-		mappedConcept.BroaderConcepts = convertRelationship(conceptsApiResponse.Broader)
+	broader, err := convertRelationship(conceptsApiResponse.Broader, rh.apiURL)
+	if err != nil {
+		log.WithError(err).Error("converting broader concepts")
+		return Concept{}, false, err
 	}
-	if len(conceptsApiResponse.Narrower) > 0 {
-		mappedConcept.NarrowerConcepts = convertRelationship(conceptsApiResponse.Narrower)
+
+	narrower, err := convertRelationship(conceptsApiResponse.Narrower, rh.apiURL)
+	if err != nil {
+		log.WithError(err).Error("converting narrower concepts")
+		return Concept{}, false, err
 	}
-	if len(conceptsApiResponse.Related) > 0 {
-		mappedConcept.RelatedConcepts = convertRelationship(conceptsApiResponse.Related)
+
+	related, err := convertRelationship(conceptsApiResponse.Related, rh.apiURL)
+	if err != nil {
+		log.WithError(err).Error("converting related concepts")
+		return Concept{}, false, err
 	}
+
+	mappedConcept.NarrowerConcepts = narrower
+	mappedConcept.BroaderConcepts = broader
+	mappedConcept.RelatedConcepts = related
 
 	return mappedConcept, true, nil
 }
@@ -383,20 +417,35 @@ func extractFinalSectionOfString(stringToTransform string) string {
 	return ss[len(ss)-1]
 }
 
-func convertRelationship(relationships []Relationship) []Thing {
+func convertRelationship(relationships []Relationship, baseURL string) ([]Thing, error) {
 	var convertedRelationships []Thing
+
 	for _, rc := range relationships {
+		uuid := extractFinalSectionOfString(rc.Concept.ID)
+		typ := extractFinalSectionOfString(rc.Concept.Type)
+
+		apiURL, err := ontology.APIURL(uuid, []string{typ}, baseURL)
+		if err != nil {
+			return nil, err
+		}
+
+		typeh, err := ontology.FullTypeHierarchy(rc.Concept.Type)
+		if err != nil {
+			return nil, err
+		}
+
 		convertedRelationships = append(convertedRelationships, Thing{
 			ID:           convertID(rc.Concept.ID),
-			APIURL:       mapper.APIURL(extractFinalSectionOfString(rc.Concept.ID), []string{extractFinalSectionOfString(rc.Concept.Type)}, ""),
-			Types:        mapper.FullTypeHierarchy(rc.Concept.Type),
+			APIURL:       apiURL,
+			Types:        typeh,
 			DirectType:   rc.Concept.Type,
 			PrefLabel:    rc.Concept.PrefLabel,
 			IsDeprecated: rc.Concept.IsDeprecated,
 			Predicate:    mapPredicate(rc.Predicate),
 		})
 	}
-	return convertedRelationships
+
+	return convertedRelationships, nil
 }
 
 func mapTypedValues(concept *Concept, keypair TypedValue) {
