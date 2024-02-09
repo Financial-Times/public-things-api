@@ -12,7 +12,7 @@ import (
 
 	"io/ioutil"
 
-	ontology "github.com/Financial-Times/cm-graph-ontology"
+	ontology "github.com/Financial-Times/cm-graph-ontology/v2"
 	fthealth "github.com/Financial-Times/go-fthealth/v1_1"
 	"github.com/Financial-Times/go-logger"
 	"github.com/Financial-Times/service-status-go/gtg"
