@@ -35,11 +35,6 @@ spec:
         env:
           - name: APP_PORT
             value: "8080"
-          - name: NEO_URL
-            valueFrom:
-              configMapKeyRef:
-                name: global-config
-                key: neo4j.read.write.url
           - name: CACHE_DURATION
             value: 5m
           - name: CONCEPTS_API
