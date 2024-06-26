@@ -33,6 +33,8 @@ const (
 	twitterURI      = "http://www.ft.com/ontology/twitterHandle"
 	thingsApiUrl    = "http://api.ft.com/things/"
 	ftThing         = "http://www.ft.com/thing/"
+
+	xPolicyHeader = "X-Policy"
 )
 
 var brandPredicateMap = map[string]string{
@@ -90,6 +92,7 @@ func (rh *ThingsHandler) GetThing(w http.ResponseWriter, r *http.Request) {
 	relationships := r.URL.Query()["showRelationship"]
 	w.Header().Set("Content-Type", "application/json; charset=UTF-8")
 
+	logger.Infof("Current X-Policy values: %s", r.Header.Get(xPolicyHeader))
 	if uuid == "" {
 		http.Error(w, "uuid required", http.StatusBadRequest)
 		return
@@ -100,7 +103,7 @@ func (rh *ThingsHandler) GetThing(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	thing, found, err := rh.getThingViaConceptsApi(uuid, relationships, transID)
+	thing, found, err := rh.getThingViaConceptsApi(uuid, relationships, transID, r.Header.Get(xPolicyHeader))
 	if err != nil {
 		w.WriteHeader(http.StatusServiceUnavailable)
 		msg := fmt.Sprintf(`{"message":"Error getting thing with uuid %s, err=%s"}`, uuid, err.Error())
@@ -184,7 +187,7 @@ func (rh *ThingsHandler) GetThings(w http.ResponseWriter, r *http.Request) {
 
 	// start getting things
 	for _, uuid := range uuids {
-		go rh.getChanneledThing(uuid, relationships, transID, uctCh, errCh, &wg)
+		go rh.getChanneledThing(uuid, relationships, transID, r.Header.Get(xPolicyHeader), uctCh, errCh, &wg)
 	}
 
 	// start watching the sync bucket and close the channel
@@ -213,11 +216,11 @@ func (rh *ThingsHandler) GetThings(w http.ResponseWriter, r *http.Request) {
 	}
 }
 
-func (rh *ThingsHandler) getChanneledThing(uuid string, relationships []string, transID string, uctCh chan *uuidConceptTuple,
+func (rh *ThingsHandler) getChanneledThing(uuid string, relationships []string, transID string, xPolicies string, uctCh chan *uuidConceptTuple,
 	errCh chan *uuidErrorTuple, wg *sync.WaitGroup) {
 
 	defer wg.Done()
-	thing, found, err := rh.getThingViaConceptsApi(uuid, relationships, transID)
+	thing, found, err := rh.getThingViaConceptsApi(uuid, relationships, transID, xPolicies)
 
 	if err != nil {
 		errCh <- &uuidErrorTuple{uuid, err}
@@ -232,7 +235,7 @@ func (rh *ThingsHandler) getChanneledThing(uuid string, relationships []string, 
 		validRegexp := regexp.MustCompile(validUUID)
 
 		canonicalUUID := validRegexp.FindString(thing.ID)
-		thing, found, err = rh.getThingViaConceptsApi(canonicalUUID, relationships, transID)
+		thing, found, err = rh.getThingViaConceptsApi(canonicalUUID, relationships, transID, xPolicies)
 
 		if err != nil {
 			errCh <- &uuidErrorTuple{uuid, err}
@@ -298,7 +301,7 @@ func validateUUID(uuids ...string) error {
 	return nil
 }
 
-func (rh *ThingsHandler) getThingViaConceptsApi(UUID string, relationships []string, transID string) (Concept, bool, error) {
+func (rh *ThingsHandler) getThingViaConceptsApi(UUID string, relationships []string, transID string, xPolicies string) (Concept, bool, error) {
 	log := logger.WithTransactionID(transID).WithUUID(UUID)
 	mappedConcept := Concept{}
 
@@ -323,6 +326,7 @@ func (rh *ThingsHandler) getThingViaConceptsApi(UUID string, relationships []str
 	}
 
 	request.Header.Set("X-Request-Id", transID)
+	request.Header.Set(xPolicyHeader, xPolicies)
 
 	resp, err := rh.client.Do(request)
 	if err != nil {
